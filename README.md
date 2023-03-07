@@ -1,4 +1,4 @@
-# playback-speed-chrome-extention
+# playback-speed-chrome-extension
 
 Youtubeなど動画の再生速度をコマンドで変更できるようにするChrome拡張機能です。
 
