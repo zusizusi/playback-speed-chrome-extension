@@ -1,7 +1,7 @@
 {
   "name": "more speed",
-  "version": "1.0.19",
-  "manifest_version": 2,
+  "version": "1.0.0",
+  "manifest_version": 3,
   "description": "video playback speed changer",
   "content_scripts": [
     {
