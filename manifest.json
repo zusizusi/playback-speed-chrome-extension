@@ -1,12 +1,13 @@
 {
-  "name": "more speed",
+  "name": "Video Speed Controller",
   "version": "1.0.0",
   "manifest_version": 3,
   "description": "video playback speed changer",
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["main.js"]
+      "js": ["test.js"]
     }
-  ]
+  ],
+  "permissions": ["storage"]
 }

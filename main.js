@@ -1,105 +1,108 @@
-"use strict";
-console.log("読み込み");
+console.log("Hello! from Video Speed Controller");
+
+// DOM構築後に実行
 window.onload = function () {
-  console.log("Hello! from More Speed Extention");
-  var playbackSpeed = 1;
-  var video = document.querySelector("video");
-  var canv = document.createElement("canvas");
-  canv.id = "canvasSpeed";
-  // canv.width = 300;
-  // canv.height = 1500;
-  // canv.style.top = 0;
-  // canv.style.left = 0;
-  // canv.setAttribute( "width" ,  );
-  // canv.setAttribute( "height" , 500 );
-  canv.style.zIndex = 1;
-  canv.style.position = "absolute";
-  document.body.appendChild(canv);
-  var timerId;
-  // document.body.appendChild(canvas); // adds the canvas to the body element
-  // document.getElementById('container').appendChild(canvas)
-  // document.getElementsByClassName('html5-video-container').appendChild(canv)
-  window.document.onkeydown = function (event) {
-    // canv.width = parseInt(video.style.width)/2;
-    var video = document.querySelector("video");
-    var orgW = video.videoWidth;
-    var orgH = video.videoHeight;
-    var orgR = orgH / orgW;
+  if (!document.querySelector("video")) {
+    console.log("video element not found");
+    return;
+  }
+  var playbackSpeed;
+  var speedIndicatorTimerId;
+  var targetVideo = document.querySelector("video");
+  var speedIndicatorCanvas = document.createElement("canvas");
+  speedIndicatorCanvas.id = "speedIndicatorCanvas";
+  speedIndicatorCanvas.style.zIndex = 1;
+  speedIndicatorCanvas.style.position = "absolute";
+  speedIndicatorCanvas.style.display = "none";
+  document.body.appendChild(speedIndicatorCanvas);
 
-    // videoタグのサイズ
-    var videoW = video.clientWidth;
-    var videoH = video.clientHeight;
-    var videoR = videoH / videoW;
-
-    // 描画されている部分のサイズ
-    var screenW, screenH;
-    if (orgR > videoR) {
-      screenH = video.clientHeight;
-      screenW = screenH / orgR;
-    } else {
-      screenW = video.clientWidth;
-      screenH = screenW * orgR;
+  // 自動再生動画の再生速度を変更
+  targetVideo.addEventListener("play", () => {
+    chrome.storage.local.get({ playbackSpeed: 1.0 }).then((result) => {
+      playbackSpeed = result.playbackSpeed;
+      console.log(
+        "Get playbackSpeed from local storage : " + result.playbackSpeed
+      );
+    });
+    if (playbackSpeed !== 1.0) {
+      var targetVideo = document.querySelector("video");
+      targetVideo.playbackRate = Number(playbackSpeed.toFixed(1));
+      clearTimeout(speedIndicatorTimerId);
+      clearSpeedIndicator();
+      drawSpeedIndicator();
+      speedIndicatorTimerId = setTimeout(clearSpeedIndicator, 3000);
+      console.log("Video playback has started.");
     }
+  });
 
-    canv.width = parseInt(screenW) / 2;
-    // canv.height = parseInt(video.style.height)/3;
-    canv.height = parseInt(screenH) / 3;
-    var clientRect = video.getBoundingClientRect();
-    canv.style.top =
-      clientRect.top + (parseInt(video.style.height) * 2) / 5 + "px";
-    canv.style.left = clientRect.left + parseInt(video.style.width) / 2 + "px";
+  window.document.onkeydown = function (event) {
+    targetVideo = document.querySelector("video");
+    chrome.storage.local.get({ playbackSpeed: 1.0 }).then((result) => {
+      playbackSpeed = result.playbackSpeed;
+      console.log(
+        "Get playbackSpeed from local storage : " + result.playbackSpeed
+      );
+    });
+    speedIndicatorCanvas.width = targetVideo.clientWidth;
+    speedIndicatorCanvas.height = targetVideo.clientHeight;
+    var clientRect = targetVideo.getBoundingClientRect();
+    speedIndicatorCanvas.style.top = clientRect.top + "px";
+    speedIndicatorCanvas.style.left = clientRect.left + "px";
 
     if (playbackSpeed <= 50.0 && event.key === "d") {
       playbackSpeed += 0.1;
-      clearTimeout(timerId);
-      clearDraw();
-      drawSpeed();
-      timerId = setTimeout(clearDraw, 3000);
-      // drawSpeed();
-    } else if (playbackSpeed >= 0.1 && event.key === "a") {
+      clearTimeout(speedIndicatorTimerId);
+      clearSpeedIndicator();
+      drawSpeedIndicator();
+      speedIndicatorTimerId = setTimeout(clearSpeedIndicator, 3000);
+    } else if (playbackSpeed > 0.1 && event.key === "a") {
+      console.log(playbackSpeed);
       playbackSpeed -= 0.1;
-      clearTimeout(timerId);
-      clearDraw();
-      drawSpeed();
-      timerId = setTimeout(clearDraw, 3000);
-      // drawSpeed();
+      clearTimeout(speedIndicatorTimerId);
+      clearSpeedIndicator();
+      drawSpeedIndicator();
+      speedIndicatorTimerId = setTimeout(clearSpeedIndicator, 3000);
     } else if (event.key === "s") {
-      playbackSpeed = 1;
-      clearTimeout(timerId);
-      clearDraw();
-      drawSpeed();
-      timerId = setTimeout(clearDraw, 3000);
+      playbackSpeed = 1.0;
+      clearTimeout(speedIndicatorTimerId);
+      clearSpeedIndicator();
+      drawSpeedIndicator();
+      speedIndicatorTimerId = setTimeout(clearSpeedIndicator, 3000);
     } else {
-      clearTimeout(timerId);
-      clearDraw();
+      clearTimeout(speedIndicatorTimerId);
+      clearSpeedIndicator();
     }
-    video.playbackRate = playbackSpeed;
-    console.log("playbackSpeed : " + playbackSpeed.toFixed(1));
+    targetVideo.playbackRate = Number(playbackSpeed.toFixed(1));
+    chrome.storage.local
+      .set({ playbackSpeed: Number(playbackSpeed.toFixed(1)) })
+      .then(() => {
+        console.log("playbackSpeed is set to " + playbackSpeed);
+      });
   };
-
-  function drawSpeed() {
-    canv = document.getElementById("canvasSpeed");
-    canv.style.display = "block";
-    var ctx = canv.getContext("2d");
-    ctx.clearRect(0, 0, canv.width, canv.height);
-    // ctx.translate(10,150);
-    ctx.fillStyle = "gray";
-    ctx.font = canv.height + "px serif";
-    ctx.textBaseline = "middle";
-    ctx.textAlign = "end";
-    ctx.fillText(
-      String(playbackSpeed.toFixed(1)) + " x",
-      canv.width - canv.width * 0.1,
-      canv.height / 2
-    );
-    // ctx.fillText("aaaaaaaaaaaaaaaa", 100, 100);
-    // var ctx = document.getElementById('canvasSpeed').getContext("2d");
-  }
-
-  function clearDraw() {
-    canv = document.getElementById("canvasSpeed");
-    var ctx = canv.getContext("2d");
-    ctx.clearRect(0, 0, canv.width, canv.height);
-    canv.style.display = "none";
-  }
 };
+
+function drawSpeedIndicator() {
+  speedIndicatorCanvas = document.getElementById("speedIndicatorCanvas");
+  speedIndicatorCanvas.style.display = "block";
+  var ctx = speedIndicatorCanvas.getContext("2d");
+  ctx.clearRect(0, 0, speedIndicatorCanvas.width, speedIndicatorCanvas.height);
+  ctx.fillStyle = "gray";
+  ctx.font = parseInt(speedIndicatorCanvas.height / 3) + "px Sans-Serif ";
+  ctx.textBaseline = "bottom";
+  ctx.textAlign = "right";
+  ctx.maxWidth = speedIndicatorCanvas.width;
+  ctx.maxHeight = speedIndicatorCanvas.height;
+  var speedText = String(playbackSpeed.toFixed(1)) + " x";
+  ctx.fillText(
+    speedText,
+    speedIndicatorCanvas.width,
+    speedIndicatorCanvas.height
+  );
+}
+
+function clearSpeedIndicator() {
+  speedIndicatorCanvas = document.getElementById("speedIndicatorCanvas");
+  var ctx = speedIndicatorCanvas.getContext("2d");
+  ctx.clearRect(0, 0, speedIndicatorCanvas.width, speedIndicatorCanvas.height);
+  speedIndicatorCanvas.style.display = "none";
+}
