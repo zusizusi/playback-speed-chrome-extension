@@ -131,12 +131,14 @@ function clearSpeedIndicator(canvas) {
   canvas.style.display = "none";
 }
 
-// バックグラウンドスクリプトからのメッセージを受け取るイベント
-chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
-  // メッセージに動画URLが含まれていれば
-  if (message.video) {
-    // 動画URLを表示
-    console.log(message.video);
-    // 動画に関する処理（省略）
-  }
-});
+function changePlaybackRate(speed) {
+  // iframeを取得する
+  const iframe = document.querySelector("iframe");
+  // iframeの中のvideoタグを取得する
+  const video = iframe.contentWindow.document.querySelector("video");
+  // 再生速度を変更する
+  video.playbackRate = speed;
+}
+
+// 例えば、再生速度を2倍に変更する場合
+changePlaybackRate(5);
