@@ -9,24 +9,24 @@ try {
   if (!document.querySelector("video")) {
     throw new Error("video element not found");
   } else {
-    // 自動再生動画の再生速度を変更用
-    targetVideo.addEventListener("play", () => {
-      targetVideo = document.querySelector("video");
-      chrome.storage.local.get({ playbackSpeed: 1.0 }).then((result) => {
-        playbackSpeed = result.playbackSpeed;
-        console.log(
-          "Get playbackSpeed from local storage : " + result.playbackSpeed
-        );
-        setPlaybackSpeed(targetVideo, playbackSpeed, timerDuration);
-      });
+    chrome.storage.local.get({ playbackSpeed: 1.0 }).then((result) => {
+      playbackSpeed = result.playbackSpeed;
+      console.log(
+        "Get playbackSpeed from local storage : " + result.playbackSpeed
+      );
+      setPlaybackSpeed(targetVideo, playbackSpeed, timerDuration);
     });
   }
-  chrome.storage.local.get({ playbackSpeed: 1.0 }).then((result) => {
-    playbackSpeed = result.playbackSpeed;
-    console.log(
-      "Get playbackSpeed from local storage : " + result.playbackSpeed
-    );
-    setPlaybackSpeed(targetVideo, playbackSpeed, timerDuration);
+  // 自動再生動画の再生速度を変更用
+  targetVideo.addEventListener("canplay", () => {
+    targetVideo = document.querySelector("video");
+    chrome.storage.local.get({ playbackSpeed: 1.0 }).then((result) => {
+      playbackSpeed = result.playbackSpeed;
+      console.log(
+        "Get playbackSpeed from local storage : " + result.playbackSpeed
+      );
+      setPlaybackSpeed(targetVideo, playbackSpeed, timerDuration);
+    });
   });
 
   window.addEventListener("keydown", (event) => {
