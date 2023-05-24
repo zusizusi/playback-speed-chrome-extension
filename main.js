@@ -5,32 +5,75 @@ let targetVideo = document.querySelector("video");
 let speedIndicatorCanvas = createCanvas();
 const timerDuration = 1000;
 
-try {
-  if (!document.querySelector("video")) {
-    throw new Error("video element not found");
-  } else {
-    chrome.storage.local.get({ playbackSpeed: 1.0 }).then((result) => {
-      playbackSpeed = result.playbackSpeed;
-      console.log(
-        "Get playbackSpeed from local storage : " + result.playbackSpeed
-      );
-      setPlaybackSpeed(targetVideo, playbackSpeed, timerDuration);
-    });
+if (window.location.hostname === "www.youtube.com") {
+  console.log("Youtube!!!!!!!!!!");
+  // ルート要素を設定（ここではdocument.bodyを監視対象とします）
+  const targetNode = document.body;
+  // MutationObserverの設定
+  const config = {
+    attributes: false,
+    childList: true,
+    subtree: true,
+    characterData: false,
+  };
+  // コールバック関数
+  const callback = function (mutationsList, observer) {
+    for (let mutation of mutationsList) {
+      if (mutation.type === "childList") {
+        mutation.addedNodes.forEach((node) => {
+          if (node.nodeName === "VIDEO") {
+            console.log("A video node has been added:", node);
+            targetVideo = node;
+            try {
+              if (!document.querySelector("video")) {
+                throw new Error("video element not found");
+              } else {
+                initializeEvents(targetVideo);
+              }
+            } catch (e) {
+              console.log(e.message);
+            }
+          }
+        });
+      }
+    }
+  };
+  // MutationObserverのインスタンスを作成
+  const observer = new MutationObserver(callback);
+  // MutationObserverを開始
+  observer.observe(targetNode, config);
+} else {
+  try {
+    if (!document.querySelector("video")) {
+      throw new Error("video element not found");
+    } else {
+      initializeEvents(targetVideo);
+    }
+  } catch (e) {
+    console.log(e.message);
   }
+}
+
+function initializeEvents(targetVideo) {
+  chrome.storage.local.get({ playbackSpeed: 1.0 }).then((result) => {
+    playbackSpeed = result.playbackSpeed;
+    console.log(
+      "Get playbackSpeed from local storage : " + result.playbackSpeed
+    );
+    setPlaybackSpeed(targetVideo, playbackSpeed, timerDuration);
+  });
   // 自動再生動画の再生速度を変更用
   targetVideo.addEventListener("canplay", () => {
-    targetVideo = document.querySelector("video");
     chrome.storage.local.get({ playbackSpeed: 1.0 }).then((result) => {
       playbackSpeed = result.playbackSpeed;
       console.log(
         "Get playbackSpeed from local storage : " + result.playbackSpeed
       );
-      setPlaybackSpeed(targetVideo, playbackSpeed, timerDuration);
     });
+    setPlaybackSpeed(targetVideo, playbackSpeed, timerDuration);
   });
 
   window.addEventListener("keydown", (event) => {
-    targetVideo = document.querySelector("video");
     speedIndicatorCanvas.width = targetVideo.clientWidth;
     speedIndicatorCanvas.height = targetVideo.clientHeight;
     var clientRect = targetVideo.getBoundingClientRect();
@@ -51,8 +94,6 @@ try {
         clearSpeedIndicator(speedIndicatorCanvas);
     }
   });
-} catch (e) {
-  console.log(e.message);
 }
 
 function createCanvas() {
@@ -130,15 +171,3 @@ function clearSpeedIndicator(canvas) {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   canvas.style.display = "none";
 }
-
-function changePlaybackRate(speed) {
-  // iframeを取得する
-  const iframe = document.querySelector("iframe");
-  // iframeの中のvideoタグを取得する
-  const video = iframe.contentWindow.document.querySelector("video");
-  // 再生速度を変更する
-  video.playbackRate = speed;
-}
-
-// 例えば、再生速度を2倍に変更する場合
-changePlaybackRate(5);
