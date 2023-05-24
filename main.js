@@ -6,6 +6,10 @@ let speedIndicatorCanvas = createCanvas();
 const timerDuration = 1000;
 
 if (window.location.hostname === "www.youtube.com") {
+  // youtubeの動画に直接遷移した場合
+  if (document.querySelector("video")) {
+    initializeEvents(targetVideo);
+  }
   console.log("Youtube!!!!!!!!!!");
   // ルート要素を設定（ここではdocument.bodyを監視対象とします）
   const targetNode = document.body;
@@ -24,15 +28,7 @@ if (window.location.hostname === "www.youtube.com") {
           if (node.nodeName === "VIDEO") {
             console.log("A video node has been added:", node);
             targetVideo = node;
-            try {
-              if (!document.querySelector("video")) {
-                throw new Error("video element not found");
-              } else {
-                initializeEvents(targetVideo);
-              }
-            } catch (e) {
-              console.log(e.message);
-            }
+            initializeEvents(targetVideo);
           }
         });
       }
@@ -55,30 +51,20 @@ if (window.location.hostname === "www.youtube.com") {
 }
 
 function initializeEvents(targetVideo) {
-  chrome.storage.local.get({ playbackSpeed: 1.0 }).then((result) => {
-    playbackSpeed = result.playbackSpeed;
-    console.log(
-      "Get playbackSpeed from local storage : " + result.playbackSpeed
-    );
-    setPlaybackSpeed(targetVideo, playbackSpeed, timerDuration);
-  });
   // 自動再生動画の再生速度を変更用
   targetVideo.addEventListener("canplay", () => {
+    console.log("play!!!!!!!!!!");
     chrome.storage.local.get({ playbackSpeed: 1.0 }).then((result) => {
       playbackSpeed = result.playbackSpeed;
       console.log(
         "Get playbackSpeed from local storage : " + result.playbackSpeed
       );
+      setPlaybackSpeed(targetVideo, playbackSpeed, timerDuration);
     });
-    setPlaybackSpeed(targetVideo, playbackSpeed, timerDuration);
   });
 
   window.addEventListener("keydown", (event) => {
-    speedIndicatorCanvas.width = targetVideo.clientWidth;
-    speedIndicatorCanvas.height = targetVideo.clientHeight;
-    var clientRect = targetVideo.getBoundingClientRect();
-    speedIndicatorCanvas.style.top = clientRect.top + "px";
-    speedIndicatorCanvas.style.left = clientRect.left + "px";
+    event.preventDefault();
     switch (event.key) {
       case "d":
         increaseSpeed(targetVideo, timerDuration);
@@ -102,11 +88,17 @@ function createCanvas() {
   canvas.style.position = "absolute";
   canvas.style.zIndex = 1;
   canvas.style.display = "none";
+  canvas.style.pointerEvents = "none";
   document.body.appendChild(canvas);
   return canvas;
 }
 
 function setPlaybackSpeed(video, speed, duration) {
+  speedIndicatorCanvas.width = video.clientWidth;
+  speedIndicatorCanvas.height = video.clientHeight;
+  var clientRect = video.getBoundingClientRect();
+  speedIndicatorCanvas.style.top = clientRect.top + "px";
+  speedIndicatorCanvas.style.left = clientRect.left + "px";
   video.playbackRate = Number(speed.toFixed(1));
   clearTimeout(speedIndicatorTimerId);
   clearSpeedIndicator(speedIndicatorCanvas);
