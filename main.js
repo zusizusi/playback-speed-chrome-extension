@@ -60,7 +60,6 @@ function initializeEvents(targetVideo) {
   });
 
   window.addEventListener("keydown", (event) => {
-    event.preventDefault();
     switch (event.key) {
       case "d":
         increaseSpeed(targetVideo, timerDuration);
