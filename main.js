@@ -6,9 +6,6 @@ let speedIndicatorCanvas = createCanvas();
 const timerDuration = 1000;
 
 if (window.location.hostname === "www.youtube.com") {
-  console.log("Youtube!!!!!!!!!!");
-  // ルート要素を設定
-  // const targetNode = document.body;
   const targetNode = document.getElementById("content")
   // MutationObserverの設定
   const config = {
@@ -17,7 +14,6 @@ if (window.location.hostname === "www.youtube.com") {
     subtree: true,
     characterData: false,
   };
-  // コールバック関数
   const callback = function (mutationsList, observer) {
     for (let mutation of mutationsList) {
       if (mutation.type === "childList") {
@@ -31,18 +27,15 @@ if (window.location.hostname === "www.youtube.com") {
       }
     }
   };
-  // MutationObserverのインスタンスを作成
   const observer = new MutationObserver(callback);
-  // MutationObserverを開始
 
   // youtubeの動画に直接遷移した場合
   if (document.querySelector("video")) {
     initializeEvents(targetVideo);
   }else{
-    observer.observe(targetNode, config);
+    observer.observe(targetNode, config); // MutationObserverを開始
   }
 } else {
-  console.log("not Youtube")
   try {
     if (!document.querySelector("video")) {
       throw new Error("video element not found");
@@ -57,7 +50,6 @@ if (window.location.hostname === "www.youtube.com") {
 function initializeEvents(targetVideo) {
   // 自動再生動画の再生速度を変更用
   targetVideo.addEventListener("canplay", () => {
-    console.log("play!!!!!!!!!!");
     chrome.storage.local.get({ playbackSpeed: 1.0 }).then((result) => {
       playbackSpeed = result.playbackSpeed;
       console.log(
