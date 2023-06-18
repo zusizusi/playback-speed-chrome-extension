@@ -5,49 +5,77 @@ let targetVideo = document.querySelector("video");
 let speedIndicatorCanvas = createCanvas();
 const timerDuration = 1000;
 
-if (window.location.hostname === "www.youtube.com") {
-  const targetNode = document.getElementById("content")
-  // MutationObserverの設定
-  const config = {
-    attributes: false,
-    childList: true,
-    subtree: true,
-    characterData: false,
-  };
-  const callback = function (mutationsList, observer) {
-    for (let mutation of mutationsList) {
-      if (mutation.type === "childList") {
-        mutation.addedNodes.forEach((node) => {
-          if (node.nodeName === "VIDEO") {
-            console.log("A video node has been added:", node);
-            targetVideo = node;
-            initializeEvents(targetVideo);
-          }
-        });
+let sites = {
+  "www.youtube.com": {
+    init: function() {
+      const targetNode = document.getElementById("content")
+      const config = {
+        attributes: false,
+        childList: true,
+        subtree: true,
+        characterData: false,
+      };
+      const observer = new MutationObserver(callback);
+
+      if (document.querySelector("video")) {
+        initializeEvents(targetVideo);
+      } else {
+        observer.observe(targetNode, config); // MutationObserverを開始
       }
     }
-  };
-  const observer = new MutationObserver(callback);
+  },
+  "www.netflix.com": {
+    init: function() {
+      console.log("netflix")  
+      const targetNode = document.getElementById("appMountPoint")
+      const config = {
+        attributes: false,
+        childList: true,
+        subtree: true,
+        characterData: false,
+      };
+      const observer = new MutationObserver(callback);
 
-  // youtubeの動画に直接遷移した場合
-  if (document.querySelector("video")) {
-    initializeEvents(targetVideo);
-  }else{
-    observer.observe(targetNode, config); // MutationObserverを開始
-  }
-} else {
-  try {
-    if (!document.querySelector("video")) {
-      throw new Error("video element not found");
-    } else {
-      initializeEvents(targetVideo);
+      if (document.querySelector("video")) {
+        initializeEvents();
+      } else {
+        observer.observe(targetNode, config); // MutationObserverを開始
+      }
     }
-  } catch (e) {
-    console.log(e.message);
+  }
+};
+
+let hostname = window.location.hostname;
+
+if (sites[hostname]) {
+  sites[hostname].init();
+} else {
+    try {
+      if (!document.querySelector("video")) {
+        throw new Error("video element not found");
+      } else {
+        initializeEvents();
+      }
+    } catch (e) {
+      console.log(e.message);
+    }
+}
+
+function callback(mutationsList, observer) {
+  for (let mutation of mutationsList) {
+    if (mutation.type === "childList") {
+      mutation.addedNodes.forEach((node) => {
+        if (node.nodeName === "VIDEO") {
+          // console.log("A video node has been added:", node);
+          // targetVideo = node;
+            initializeEvents();
+        }
+      });
+    }
   }
 }
 
-function initializeEvents(targetVideo) {
+function initializeEvents(targetVideo = document.querySelector("video")) {
   // 自動再生動画の再生速度を変更用
   targetVideo.addEventListener("canplay", () => {
     chrome.storage.local.get({ playbackSpeed: 1.0 }).then((result) => {
@@ -55,11 +83,13 @@ function initializeEvents(targetVideo) {
       console.log(
         "Get playbackSpeed from local storage : " + result.playbackSpeed
       );
-      setPlaybackSpeed(targetVideo, playbackSpeed, timerDuration);
+
+      setPlaybackSpeed(document.querySelector("video"), playbackSpeed, timerDuration);
     });
   });
 
   window.addEventListener("keydown", (event) => {
+    targetVideo = document.querySelector("video");
     switch (event.key) {
       case "d":
         increaseSpeed(targetVideo, timerDuration);
@@ -94,6 +124,7 @@ function setPlaybackSpeed(video, speed, duration) {
   var clientRect = video.getBoundingClientRect();
   speedIndicatorCanvas.style.top = clientRect.top + "px";
   speedIndicatorCanvas.style.left = clientRect.left + "px";
+  // console.log(speedIndicatorCanvas.style.top);
   video.playbackRate = Number(speed.toFixed(1));
   clearTimeout(speedIndicatorTimerId);
   clearSpeedIndicator(speedIndicatorCanvas);
