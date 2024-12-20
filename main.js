@@ -7,8 +7,12 @@ const timerDuration = 1000;
 
 let sites = {
   "www.youtube.com": {
-    init: function() {
-      const targetNode = document.getElementById("content")
+    init: function () {
+      let targetNode = document.getElementById("content");
+      if (!targetNode) {
+        // Fallback to another node or use the body
+        targetNode = document.querySelector("ytd-app") || document.body;
+      }
       const config = {
         attributes: false,
         childList: true,
@@ -19,15 +23,17 @@ let sites = {
 
       if (document.querySelector("video")) {
         initializeEvents(targetVideo);
+      } else if (targetNode) {
+        observer.observe(targetNode, config); // Start MutationObserver
       } else {
-        observer.observe(targetNode, config); // MutationObserverを開始
+        console.error("No valid target node found for MutationObserver");
       }
-    }
+    },
   },
   "www.netflix.com": {
-    init: function() {
-      console.log("netflix")  
-      const targetNode = document.getElementById("appMountPoint")
+    init: function () {
+      console.log("netflix");
+      const targetNode = document.getElementById("appMountPoint");
       const config = {
         attributes: false,
         childList: true,
@@ -41,8 +47,8 @@ let sites = {
       } else {
         observer.observe(targetNode, config); // MutationObserverを開始
       }
-    }
-  }
+    },
+  },
 };
 
 let hostname = window.location.hostname;
@@ -50,15 +56,15 @@ let hostname = window.location.hostname;
 if (sites[hostname]) {
   sites[hostname].init();
 } else {
-    try {
-      if (!document.querySelector("video")) {
-        throw new Error("video element not found");
-      } else {
-        initializeEvents();
-      }
-    } catch (e) {
-      console.log(e.message);
+  try {
+    if (!document.querySelector("video")) {
+      throw new Error("video element not found");
+    } else {
+      initializeEvents();
     }
+  } catch (e) {
+    console.log(e.message);
+  }
 }
 
 function callback(mutationsList, observer) {
@@ -66,9 +72,8 @@ function callback(mutationsList, observer) {
     if (mutation.type === "childList") {
       mutation.addedNodes.forEach((node) => {
         if (node.nodeName === "VIDEO") {
-          // console.log("A video node has been added:", node);
-          // targetVideo = node;
-            initializeEvents();
+          targetVideo = node;
+          initializeEvents(targetVideo);
         }
       });
     }
@@ -76,20 +81,36 @@ function callback(mutationsList, observer) {
 }
 
 function initializeEvents(targetVideo = document.querySelector("video")) {
+  if (!targetVideo) {
+    console.error("Video element not found");
+    return;
+  }
   // 自動再生動画の再生速度を変更用
   targetVideo.addEventListener("canplay", () => {
-    chrome.storage.local.get({ playbackSpeed: 1.0 }).then((result) => {
-      playbackSpeed = result.playbackSpeed;
-      console.log(
-        "Get playbackSpeed from local storage : " + result.playbackSpeed
-      );
+    if (chrome.storage && chrome.storage.local) {
+      chrome.storage.local.get({ playbackSpeed: 1.0 }).then((result) => {
+        playbackSpeed = result.playbackSpeed;
+        console.log(
+          "Get playbackSpeed from local storage : " + result.playbackSpeed
+        );
 
-      setPlaybackSpeed(document.querySelector("video"), playbackSpeed, timerDuration);
-    });
+        setPlaybackSpeed(
+          document.querySelector("video"),
+          playbackSpeed,
+          timerDuration
+        );
+      });
+    } else {
+      console.error("chrome.storage.local is not available");
+    }
   });
 
   window.addEventListener("keydown", (event) => {
     targetVideo = document.querySelector("video");
+    if (!targetVideo) {
+      console.error("Video element not found");
+      return;
+    }
     switch (event.key) {
       case "d":
         increaseSpeed(targetVideo, timerDuration);
