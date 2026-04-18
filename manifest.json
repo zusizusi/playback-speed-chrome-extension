@@ -1,18 +1,24 @@
 {
   "name": "Video Speed Controller",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "manifest_version": 3,
   "description": "Extension to change video playback speed",
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
-      "js": ["main.js"],
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "main.js"
+      ],
       "run_at": "document_idle",
       "all_frames": true,
       "match_about_blank": true
     }
   ],
-  "permissions": ["storage"],
+  "permissions": [
+    "storage"
+  ],
   "icons": {
     "16": "/icons/icon16.png",
     "48": "/icons/icon48.png",
