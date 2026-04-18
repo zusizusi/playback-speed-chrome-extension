@@ -71,7 +71,10 @@ jobs:
       - name: Read extension version
         run: |
           set -euo pipefail
-          EXT_VERSION="$(node -p \"require('./manifest.json').version\")"
+          EXT_VERSION="$(node <<'EOF'
+          process.stdout.write(require('./manifest.json').version);
+          EOF
+          )"
           echo "EXT_VERSION=${EXT_VERSION}" >> "$GITHUB_ENV"
 
       - name: Package extension
