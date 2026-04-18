@@ -280,7 +280,11 @@ async function getStoredPlaybackSpeed() {
   const result = await chrome.storage.local.get({
     playbackSpeed: DEFAULT_PLAYBACK_SPEED,
   });
-  return normalizeSpeed(result.playbackSpeed);
+  const parsedSpeed = Number(result.playbackSpeed);
+  const safeSpeed = Number.isFinite(parsedSpeed)
+    ? parsedSpeed
+    : DEFAULT_PLAYBACK_SPEED;
+  return normalizeSpeed(clampSpeed(safeSpeed));
 }
 
 function saveStoredPlaybackSpeed(speed) {
@@ -297,7 +301,9 @@ function applyStoredSpeed(videoElement) {
   }
 
   getStoredPlaybackSpeed().then((storedSpeed) => {
-    setPlaybackSpeed(videoElement, storedSpeed, TIMER_DURATION);
+    setPlaybackSpeed(videoElement, storedSpeed, TIMER_DURATION, {
+      persist: false,
+    });
   });
 }
 
@@ -316,7 +322,9 @@ function initializeEvents(videoElement) {
 
     getStoredPlaybackSpeed().then((storedSpeed) => {
       console.log("Get playbackSpeed from local storage : " + storedSpeed);
-      setPlaybackSpeed(videoElement, storedSpeed, TIMER_DURATION);
+      setPlaybackSpeed(videoElement, storedSpeed, TIMER_DURATION, {
+        persist: false,
+      });
     });
   });
 
@@ -444,7 +452,12 @@ function updateSpeedIndicator(video, speed, duration = TIMER_DURATION) {
   }
 }
 
-async function setPlaybackSpeed(video, speed, duration) {
+async function setPlaybackSpeed(
+  video,
+  speed,
+  duration,
+  { persist = true } = {},
+) {
   const speedIndicatorManager = videoCanvasMap.get(video);
   const normalizedSpeed = normalizeSpeed(speed);
 
@@ -455,8 +468,10 @@ async function setPlaybackSpeed(video, speed, duration) {
     speedIndicatorManager.show(normalizedSpeed, duration);
   }
 
-  await saveStoredPlaybackSpeed(normalizedSpeed);
-  console.log("playbackSpeed is set to " + normalizedSpeed);
+  if (persist) {
+    await saveStoredPlaybackSpeed(normalizedSpeed);
+    console.log("playbackSpeed is set to " + normalizedSpeed);
+  }
 }
 
 function clampSpeed(speed) {
