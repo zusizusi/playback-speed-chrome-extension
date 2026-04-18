@@ -11,6 +11,12 @@ const TIMER_DURATION = 1000;
 const INDICATOR_Z_INDEX = 9999;
 const INDICATOR_WIDTH = 100;
 const INDICATOR_HEIGHT = 50;
+const OBSERVER_CONFIG = {
+  attributes: false,
+  childList: true,
+  subtree: true,
+  characterData: false,
+};
 
 // 各videoごとにキャンバスを管理するオブジェクト
 let videoCanvasMap = new Map();
@@ -87,6 +93,54 @@ class SpeedIndicatorManager {
   }
 }
 
+function observeForNewVideos(targetNode, errorMessage) {
+  if (!targetNode) {
+    if (errorMessage) {
+      console.error(errorMessage);
+    }
+    return false;
+  }
+
+  const observer = new MutationObserver(callback);
+  observer.observe(targetNode, OBSERVER_CONFIG);
+  return true;
+}
+
+function addVideosFromSelectors(videoSelectors) {
+  for (const selector of videoSelectors) {
+    const videos = document.querySelectorAll(selector);
+    if (videos.length > 0) {
+      videos.forEach((video) => addVideoToTargets(video));
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function initSiteWithSelectors(siteLabel, videoSelectors, targetNode) {
+  if (siteLabel) {
+    console.log(siteLabel);
+  }
+
+  const videoFound = addVideosFromSelectors(videoSelectors);
+  if (!videoFound) {
+    observeForNewVideos(
+      targetNode,
+      "No valid target node found for MutationObserver",
+    );
+  }
+}
+
+function initSiteWithDefaultVideoDetection(targetNode, errorMessage) {
+  if (document.querySelector("video")) {
+    findAndInitAllVideos();
+    return;
+  }
+
+  observeForNewVideos(targetNode, errorMessage);
+}
+
 let sites = {
   "www.youtube.com": {
     init: function () {
@@ -95,27 +149,15 @@ let sites = {
         // Fallback to another node or use the body
         targetNode = document.querySelector("ytd-app") || document.body;
       }
-      const config = {
-        attributes: false,
-        childList: true,
-        subtree: true,
-        characterData: false,
-      };
-      const observer = new MutationObserver(callback);
-
-      if (document.querySelector("video")) {
-        findAndInitAllVideos();
-      } else if (targetNode) {
-        observer.observe(targetNode, config); // Start MutationObserver
-      } else {
-        console.error("No valid target node found for MutationObserver");
-      }
+      initSiteWithDefaultVideoDetection(
+        targetNode,
+        "No valid target node found for MutationObserver",
+      );
     },
   },
 
   "www.amazon.co.jp": {
     init: function () {
-      console.log("amazon");
       // amazonのビデオプレーヤーを検出するためのセレクタを複数用意
       const videoSelectors = [
         "#dv-web-player video",
@@ -128,34 +170,12 @@ let sites = {
 
       // document.bodyを監視対象に
       const targetNode = document.body;
-      const config = {
-        attributes: false,
-        childList: true,
-        subtree: true,
-        characterData: false,
-      };
-      const observer = new MutationObserver(callback);
-
-      // セレクタを順番に試してビデオ要素を探す
-      let videoFound = false;
-      for (const selector of videoSelectors) {
-        const videos = document.querySelectorAll(selector);
-        if (videos.length > 0) {
-          videos.forEach((video) => addVideoToTargets(video));
-          videoFound = true;
-          break;
-        }
-      }
-
-      if (!videoFound) {
-        observer.observe(targetNode, config); // Start MutationObserver
-      }
+      initSiteWithSelectors("amazon", videoSelectors, targetNode);
     },
   },
 
   "www.primevideo.com": {
     init: function () {
-      console.log("amazon prime video");
       // Prime Videoのビデオプレーヤーを検出するためのセレクタを複数用意
       const videoSelectors = [
         ".webPlayerContainer video",
@@ -167,28 +187,7 @@ let sites = {
 
       // document.bodyを監視対象に
       const targetNode = document.body;
-      const config = {
-        attributes: false,
-        childList: true,
-        subtree: true,
-        characterData: false,
-      };
-      const observer = new MutationObserver(callback);
-
-      // セレクタを順番に試してビデオ要素を探す
-      let videoFound = false;
-      for (const selector of videoSelectors) {
-        const videos = document.querySelectorAll(selector);
-        if (videos.length > 0) {
-          videos.forEach((video) => addVideoToTargets(video));
-          videoFound = true;
-          break;
-        }
-      }
-
-      if (!videoFound) {
-        observer.observe(targetNode, config); // Start MutationObserver
-      }
+      initSiteWithSelectors("amazon prime video", videoSelectors, targetNode);
     },
   },
 
@@ -196,19 +195,10 @@ let sites = {
     init: function () {
       console.log("netflix");
       const targetNode = document.getElementById("appMountPoint");
-      const config = {
-        attributes: false,
-        childList: true,
-        subtree: true,
-        characterData: false,
-      };
-      const observer = new MutationObserver(callback);
-
-      if (document.querySelector("video")) {
-        findAndInitAllVideos();
-      } else {
-        observer.observe(targetNode, config); // MutationObserverを開始
-      }
+      initSiteWithDefaultVideoDetection(
+        targetNode,
+        "No valid target node found for MutationObserver",
+      );
     },
   },
 };
@@ -471,13 +461,10 @@ if (sites[hostname]) {
     findAndInitAllVideos(); // 既存のvideo要素を初期化
 
     // ページ全体を監視して新しいvideo要素を検出
-    const observer = new MutationObserver(callback);
-    observer.observe(document.body, {
-      attributes: false,
-      childList: true,
-      subtree: true,
-      characterData: false,
-    });
+    observeForNewVideos(
+      document.body,
+      "No valid target node found for MutationObserver",
+    );
   } catch (e) {
     console.log(e.message);
   }
