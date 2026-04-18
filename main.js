@@ -309,7 +309,6 @@ function applyStoredSpeed(videoElement) {
 
 function initializeEvents(videoElement) {
   if (!videoElement) {
-    console.error("Video element not found");
     return;
   }
 
@@ -400,15 +399,6 @@ function getActiveVideo() {
 
 // グローバルキーイベントは一度だけ設定
 window.addEventListener("keydown", (event) => {
-  // 最後にフォーカスされたか、最後に操作されたvideo要素を取得
-  // フォーカス情報がない場合は、最初のvideo要素を使用
-  let activeVideo = getActiveVideo();
-
-  if (!activeVideo) {
-    console.error("No video elements found");
-    return;
-  }
-
   const keyActions = {
     d: increaseSpeed,
     a: decreaseSpeed,
@@ -417,6 +407,12 @@ window.addEventListener("keydown", (event) => {
   const action = keyActions[event.key];
 
   if (action) {
+    // 最後にフォーカスされたか、最後に操作されたvideo要素を取得
+    // フォーカス情報がない場合は、最初のvideo要素を使用
+    const activeVideo = getActiveVideo();
+    if (!activeVideo) {
+      return;
+    }
     action(activeVideo, TIMER_DURATION);
   } else {
     clearAllSpeedIndicators();
