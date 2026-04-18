@@ -1,9 +1,17 @@
 console.log("Hello! from Video Speed Controller");
-let playbackSpeed;
 let speedIndicatorTimerId;
 let targetVideos = []; // 複数のvideo要素を管理するための配列
-const timerDuration = 1000;
 let isApplyingRate = false;
+
+const DEFAULT_PLAYBACK_SPEED = 1.0;
+const SPEED_STEP = 0.1;
+const MIN_PLAYBACK_SPEED = 0.1;
+const MAX_PLAYBACK_SPEED = 10.0;
+const RATE_EPSILON = 0.001;
+const TIMER_DURATION = 1000;
+const INDICATOR_Z_INDEX = 9999;
+const INDICATOR_WIDTH = 100;
+const INDICATOR_HEIGHT = 50;
 
 // 各videoごとにキャンバスを管理するオブジェクト
 let videoCanvasMap = new Map();
@@ -167,14 +175,36 @@ function addVideoToTargets(video) {
   }
 }
 
+function normalizeSpeed(speed) {
+  return Number(speed.toFixed(1));
+}
+
+async function getStoredPlaybackSpeed() {
+  if (!chrome.storage || !chrome.storage.local) {
+    return DEFAULT_PLAYBACK_SPEED;
+  }
+
+  const result = await chrome.storage.local.get({
+    playbackSpeed: DEFAULT_PLAYBACK_SPEED,
+  });
+  return normalizeSpeed(result.playbackSpeed);
+}
+
+function saveStoredPlaybackSpeed(speed) {
+  if (!chrome.storage || !chrome.storage.local) {
+    return Promise.resolve();
+  }
+
+  return chrome.storage.local.set({ playbackSpeed: normalizeSpeed(speed) });
+}
+
 function applyStoredSpeed(videoElement) {
   if (!videoElement || !chrome.storage || !chrome.storage.local) {
     return;
   }
 
-  chrome.storage.local.get({ playbackSpeed: 1.0 }).then((result) => {
-    playbackSpeed = result.playbackSpeed;
-    setPlaybackSpeed(videoElement, playbackSpeed, timerDuration);
+  getStoredPlaybackSpeed().then((storedSpeed) => {
+    setPlaybackSpeed(videoElement, storedSpeed, TIMER_DURATION);
   });
 }
 
@@ -186,18 +216,15 @@ function initializeEvents(videoElement) {
 
   // この特定のvideo要素に対してイベントを設定
   videoElement.addEventListener("canplay", () => {
-    if (chrome.storage && chrome.storage.local) {
-      chrome.storage.local.get({ playbackSpeed: 1.0 }).then((result) => {
-        playbackSpeed = result.playbackSpeed;
-        console.log(
-          "Get playbackSpeed from local storage : " + result.playbackSpeed,
-        );
-
-        setPlaybackSpeed(videoElement, playbackSpeed, timerDuration);
-      });
-    } else {
+    if (!chrome.storage || !chrome.storage.local) {
       console.error("chrome.storage.local is not available");
+      return;
     }
+
+    getStoredPlaybackSpeed().then((storedSpeed) => {
+      console.log("Get playbackSpeed from local storage : " + storedSpeed);
+      setPlaybackSpeed(videoElement, storedSpeed, TIMER_DURATION);
+    });
   });
 
   // YouTube/Primeが再生速度を戻すケースに対応して保存値を再適用
@@ -211,9 +238,8 @@ function initializeEvents(videoElement) {
         return;
       }
 
-      chrome.storage.local.get({ playbackSpeed: 1.0 }).then((result) => {
-        const desiredRate = Number(result.playbackSpeed.toFixed(1));
-        if (Math.abs(videoElement.playbackRate - desiredRate) > 0.001) {
+      getStoredPlaybackSpeed().then((desiredRate) => {
+        if (Math.abs(videoElement.playbackRate - desiredRate) > RATE_EPSILON) {
           isApplyingRate = true;
           videoElement.playbackRate = desiredRate;
           isApplyingRate = false;
@@ -282,31 +308,32 @@ window.addEventListener("keydown", (event) => {
     return;
   }
 
-  switch (event.key) {
-    case "d":
-      increaseSpeed(activeVideo, timerDuration);
-      break;
-    case "a":
-      decreaseSpeed(activeVideo, timerDuration);
-      break;
-    case "s":
-      resetSpeed(activeVideo, timerDuration);
-      break;
-    default:
-      clearTimeout(speedIndicatorTimerId);
-      clearAllSpeedIndicators();
+  const keyActions = {
+    d: increaseSpeed,
+    a: decreaseSpeed,
+    s: resetSpeed,
+  };
+  const action = keyActions[event.key];
+
+  if (action) {
+    action(activeVideo, TIMER_DURATION);
+  } else {
+    clearTimeout(speedIndicatorTimerId);
+    clearAllSpeedIndicators();
   }
 });
 
 // 全てのvideo要素に同じ再生速度を適用する関数
 function applySpeedToAllVideos(speed) {
   cleanupDisconnectedVideos();
+  const normalizedSpeed = normalizeSpeed(speed);
+
   targetVideos.forEach((video) => {
     isApplyingRate = true;
-    video.playbackRate = Number(speed.toFixed(1));
+    video.playbackRate = normalizedSpeed;
     isApplyingRate = false;
     // 各ビデオごとの速度表示を更新
-    updateSpeedIndicator(video, speed);
+    updateSpeedIndicator(video, normalizedSpeed);
   });
 }
 
@@ -315,7 +342,7 @@ function createCanvasForVideo(video) {
   const canvas = document.createElement("canvas");
   canvas.id = "speedIndicatorCanvas_" + Math.random().toString(36).substr(2, 9); // ユニークなID
   canvas.style.position = "absolute";
-  canvas.style.zIndex = 9999;
+  canvas.style.zIndex = INDICATOR_Z_INDEX;
   canvas.style.display = "none";
   canvas.style.pointerEvents = "none";
   document.body.appendChild(canvas);
@@ -359,10 +386,12 @@ function updateCanvasPosition(video, canvas) {
 
 function setPlaybackSpeed(video, speed, duration) {
   const canvas = videoCanvasMap.get(video);
+  const normalizedSpeed = normalizeSpeed(speed);
+
   if (canvas) {
     updateCanvasPosition(video, canvas);
     isApplyingRate = true;
-    video.playbackRate = Number(speed.toFixed(1));
+    video.playbackRate = normalizedSpeed;
     isApplyingRate = false;
 
     // 既存のタイマーをクリア
@@ -371,7 +400,7 @@ function setPlaybackSpeed(video, speed, duration) {
     }
 
     clearSpeedIndicator(canvas);
-    drawSpeedIndicator(canvas, speed);
+    drawSpeedIndicator(canvas, normalizedSpeed);
 
     // 新しいタイマーを設定
     canvas.timerId = setTimeout(() => {
@@ -379,43 +408,33 @@ function setPlaybackSpeed(video, speed, duration) {
     }, duration);
   }
 
-  chrome.storage.local
-    .set({ playbackSpeed: Number(speed.toFixed(1)) })
-    .then(() => {
-      console.log("playbackSpeed is set to " + Number(speed.toFixed(1)));
-    });
+  saveStoredPlaybackSpeed(normalizedSpeed).then(() => {
+    console.log("playbackSpeed is set to " + normalizedSpeed);
+  });
+}
+
+function clampSpeed(speed) {
+  return Math.max(MIN_PLAYBACK_SPEED, Math.min(MAX_PLAYBACK_SPEED, speed));
+}
+
+async function adjustSpeed(video, duration, delta) {
+  const currentSpeed = await getStoredPlaybackSpeed();
+  const nextSpeed = clampSpeed(currentSpeed + delta);
+  setPlaybackSpeed(video, nextSpeed, duration);
+  applySpeedToAllVideos(nextSpeed);
 }
 
 function increaseSpeed(video, duration) {
-  chrome.storage.local.get({ playbackSpeed: 1.0 }, (result) => {
-    playbackSpeed = result.playbackSpeed;
-    if (playbackSpeed + 0.1 <= 10.0) {
-      playbackSpeed += 0.1;
-    } else {
-      playbackSpeed = 10.0;
-    }
-    setPlaybackSpeed(video, playbackSpeed, duration);
-    applySpeedToAllVideos(playbackSpeed);
-  });
+  return adjustSpeed(video, duration, SPEED_STEP);
 }
 
 function decreaseSpeed(video, duration) {
-  chrome.storage.local.get({ playbackSpeed: 1.0 }, (result) => {
-    playbackSpeed = result.playbackSpeed;
-    if (playbackSpeed > 0.1) {
-      playbackSpeed -= 0.1;
-    } else {
-      playbackSpeed = 0.1;
-    }
-    setPlaybackSpeed(video, playbackSpeed, duration);
-    applySpeedToAllVideos(playbackSpeed);
-  });
+  return adjustSpeed(video, duration, -SPEED_STEP);
 }
 
 function resetSpeed(video, duration) {
-  playbackSpeed = 1.0;
-  setPlaybackSpeed(video, playbackSpeed, duration);
-  applySpeedToAllVideos(playbackSpeed);
+  setPlaybackSpeed(video, DEFAULT_PLAYBACK_SPEED, duration);
+  applySpeedToAllVideos(DEFAULT_PLAYBACK_SPEED);
 }
 
 function drawSpeedIndicator(canvas, speed) {
@@ -423,7 +442,12 @@ function drawSpeedIndicator(canvas, speed) {
   const ctx = canvas.getContext("2d");
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.beginPath();
-  ctx.rect(canvas.width - 100, canvas.height - 50, 100, 50);
+  ctx.rect(
+    canvas.width - INDICATOR_WIDTH,
+    canvas.height - INDICATOR_HEIGHT,
+    INDICATOR_WIDTH,
+    INDICATOR_HEIGHT,
+  );
   ctx.fill();
 
   ctx.fillStyle = "rgba(133, 133, 133, 0.7)";
