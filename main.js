@@ -1,5 +1,4 @@
 console.log("Hello! from Video Speed Controller");
-let speedIndicatorTimerId;
 let targetVideos = []; // 複数のvideo要素を管理するための配列
 let isApplyingRate = false;
 
@@ -15,6 +14,78 @@ const INDICATOR_HEIGHT = 50;
 
 // 各videoごとにキャンバスを管理するオブジェクト
 let videoCanvasMap = new Map();
+
+class SpeedIndicatorManager {
+  constructor(video) {
+    this.video = video;
+    this.timerId = null;
+    this.canvas = document.createElement("canvas");
+    this.canvas.id =
+      "speedIndicatorCanvas_" + Math.random().toString(36).substr(2, 9);
+    this.canvas.style.position = "absolute";
+    this.canvas.style.zIndex = INDICATOR_Z_INDEX;
+    this.canvas.style.display = "none";
+    this.canvas.style.pointerEvents = "none";
+    document.body.appendChild(this.canvas);
+  }
+
+  updatePosition() {
+    this.canvas.width = this.video.clientWidth;
+    this.canvas.height = this.video.clientHeight;
+    const clientRect = this.video.getBoundingClientRect();
+    this.canvas.style.top = clientRect.top + window.scrollY + "px";
+    this.canvas.style.left = clientRect.left + window.scrollX + "px";
+  }
+
+  draw(speed) {
+    this.canvas.style.display = "block";
+    const ctx = this.canvas.getContext("2d");
+    ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    ctx.beginPath();
+    ctx.rect(
+      this.canvas.width - INDICATOR_WIDTH,
+      this.canvas.height - INDICATOR_HEIGHT,
+      INDICATOR_WIDTH,
+      INDICATOR_HEIGHT,
+    );
+    ctx.fill();
+
+    ctx.fillStyle = "rgba(133, 133, 133, 0.7)";
+    ctx.font = `${parseInt(this.canvas.width / 5)}px Sans-Serif`;
+    ctx.textBaseline = "bottom";
+    ctx.textAlign = "right";
+    const speedText = `${speed.toFixed(1)} x`;
+    ctx.fillText(speedText, this.canvas.width - 10, this.canvas.height - 10);
+  }
+
+  clear() {
+    const ctx = this.canvas.getContext("2d");
+    ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    this.canvas.style.display = "none";
+  }
+
+  show(speed, duration = TIMER_DURATION) {
+    this.updatePosition();
+    this.draw(speed);
+
+    if (this.timerId) {
+      clearTimeout(this.timerId);
+    }
+
+    this.timerId = setTimeout(() => {
+      this.clear();
+      this.timerId = null;
+    }, duration);
+  }
+
+  dispose() {
+    if (this.timerId) {
+      clearTimeout(this.timerId);
+      this.timerId = null;
+    }
+    this.canvas.remove();
+  }
+}
 
 let sites = {
   "www.youtube.com": {
@@ -166,9 +237,7 @@ function callback(mutationsList, observer) {
 function addVideoToTargets(video) {
   if (!targetVideos.includes(video)) {
     targetVideos.push(video);
-    // この動画要素用の新しいキャンバスを作成
-    const canvas = createCanvasForVideo(video);
-    videoCanvasMap.set(video, canvas);
+    videoCanvasMap.set(video, new SpeedIndicatorManager(video));
     initializeEvents(video);
     applyStoredSpeed(video);
     console.log("Video element added to targets", targetVideos.length);
@@ -263,9 +332,9 @@ function cleanupDisconnectedVideos() {
       return true;
     }
 
-    const canvas = videoCanvasMap.get(video);
-    if (canvas) {
-      canvas.remove();
+    const speedIndicatorManager = videoCanvasMap.get(video);
+    if (speedIndicatorManager) {
+      speedIndicatorManager.dispose();
       videoCanvasMap.delete(video);
     }
     return false;
@@ -318,7 +387,6 @@ window.addEventListener("keydown", (event) => {
   if (action) {
     action(activeVideo, TIMER_DURATION);
   } else {
-    clearTimeout(speedIndicatorTimerId);
     clearAllSpeedIndicators();
   }
 });
@@ -337,75 +405,30 @@ function applySpeedToAllVideos(speed) {
   });
 }
 
-// 各ビデオ要素に対応するキャンバスを作成する関数
-function createCanvasForVideo(video) {
-  const canvas = document.createElement("canvas");
-  canvas.id = "speedIndicatorCanvas_" + Math.random().toString(36).substr(2, 9); // ユニークなID
-  canvas.style.position = "absolute";
-  canvas.style.zIndex = INDICATOR_Z_INDEX;
-  canvas.style.display = "none";
-  canvas.style.pointerEvents = "none";
-  document.body.appendChild(canvas);
-  return canvas;
-}
-
 // 全てのキャンバスをクリアする関数
 function clearAllSpeedIndicators() {
-  videoCanvasMap.forEach((canvas, video) => {
-    clearSpeedIndicator(canvas);
+  videoCanvasMap.forEach((speedIndicatorManager) => {
+    speedIndicatorManager.clear();
   });
 }
 
 // 特定のビデオの速度表示を更新する関数
-function updateSpeedIndicator(video, speed) {
-  const canvas = videoCanvasMap.get(video);
-  if (canvas) {
-    updateCanvasPosition(video, canvas);
-    drawSpeedIndicator(canvas, speed);
-
-    // 既存のタイマーをクリア
-    if (canvas.timerId) {
-      clearTimeout(canvas.timerId);
-    }
-
-    // 新しいタイマーを設定
-    canvas.timerId = setTimeout(() => {
-      clearSpeedIndicator(canvas);
-    }, timerDuration);
+function updateSpeedIndicator(video, speed, duration = TIMER_DURATION) {
+  const speedIndicatorManager = videoCanvasMap.get(video);
+  if (speedIndicatorManager) {
+    speedIndicatorManager.show(speed, duration);
   }
 }
 
-// キャンバスの位置をビデオに合わせて更新
-function updateCanvasPosition(video, canvas) {
-  canvas.width = video.clientWidth;
-  canvas.height = video.clientHeight;
-  var clientRect = video.getBoundingClientRect();
-  canvas.style.top = clientRect.top + window.scrollY + "px";
-  canvas.style.left = clientRect.left + window.scrollX + "px";
-}
-
 function setPlaybackSpeed(video, speed, duration) {
-  const canvas = videoCanvasMap.get(video);
+  const speedIndicatorManager = videoCanvasMap.get(video);
   const normalizedSpeed = normalizeSpeed(speed);
 
-  if (canvas) {
-    updateCanvasPosition(video, canvas);
+  if (speedIndicatorManager) {
     isApplyingRate = true;
     video.playbackRate = normalizedSpeed;
     isApplyingRate = false;
-
-    // 既存のタイマーをクリア
-    if (canvas.timerId) {
-      clearTimeout(canvas.timerId);
-    }
-
-    clearSpeedIndicator(canvas);
-    drawSpeedIndicator(canvas, normalizedSpeed);
-
-    // 新しいタイマーを設定
-    canvas.timerId = setTimeout(() => {
-      clearSpeedIndicator(canvas);
-    }, duration);
+    speedIndicatorManager.show(normalizedSpeed, duration);
   }
 
   saveStoredPlaybackSpeed(normalizedSpeed).then(() => {
@@ -435,33 +458,6 @@ function decreaseSpeed(video, duration) {
 function resetSpeed(video, duration) {
   setPlaybackSpeed(video, DEFAULT_PLAYBACK_SPEED, duration);
   applySpeedToAllVideos(DEFAULT_PLAYBACK_SPEED);
-}
-
-function drawSpeedIndicator(canvas, speed) {
-  canvas.style.display = "block";
-  const ctx = canvas.getContext("2d");
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.beginPath();
-  ctx.rect(
-    canvas.width - INDICATOR_WIDTH,
-    canvas.height - INDICATOR_HEIGHT,
-    INDICATOR_WIDTH,
-    INDICATOR_HEIGHT,
-  );
-  ctx.fill();
-
-  ctx.fillStyle = "rgba(133, 133, 133, 0.7)";
-  ctx.font = `${parseInt(canvas.width / 5)}px Sans-Serif`;
-  ctx.textBaseline = "bottom";
-  ctx.textAlign = "right";
-  const speedText = `${speed.toFixed(1)} x`;
-  ctx.fillText(speedText, canvas.width - 10, canvas.height - 10);
-}
-
-function clearSpeedIndicator(canvas) {
-  const ctx = canvas.getContext("2d");
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  canvas.style.display = "none";
 }
 
 // MutationObserverの設定とイベントの初期化
