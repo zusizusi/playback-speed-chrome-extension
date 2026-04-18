@@ -12,12 +12,14 @@ const TIMER_DURATION = 1000;
 const INDICATOR_Z_INDEX = 9999;
 const INDICATOR_WIDTH = 100;
 const INDICATOR_HEIGHT = 50;
+const MUTATION_SCAN_DEBOUNCE_MS = 120;
 const OBSERVER_CONFIG = {
   attributes: false,
   childList: true,
   subtree: true,
   characterData: false,
 };
+let mutationScanTimerId = null;
 
 // 各videoごとにキャンバスを管理するオブジェクト
 let videoCanvasMap = new Map();
@@ -105,6 +107,31 @@ function observeForNewVideos(targetNode, errorMessage) {
   const observer = new MutationObserver(callback);
   observer.observe(targetNode, OBSERVER_CONFIG);
   return true;
+}
+
+function withApplyingRate(applyRate) {
+  if (isApplyingRate) {
+    return;
+  }
+
+  isApplyingRate = true;
+  try {
+    applyRate();
+  } finally {
+    isApplyingRate = false;
+  }
+}
+
+function scheduleFullVideoScan() {
+  if (mutationScanTimerId) {
+    clearTimeout(mutationScanTimerId);
+  }
+
+  mutationScanTimerId = setTimeout(() => {
+    mutationScanTimerId = null;
+    cleanupDisconnectedVideos();
+    findAndInitAllVideos();
+  }, MUTATION_SCAN_DEBOUNCE_MS);
 }
 
 function addVideosFromSelectors(videoSelectors) {
@@ -205,12 +232,18 @@ let sites = {
 };
 
 function callback(mutationsList, observer) {
+  let shouldScheduleScan = false;
+
   for (let mutation of mutationsList) {
     if (mutation.type === "childList") {
+      shouldScheduleScan = true;
       mutation.addedNodes.forEach((node) => {
         if (node.nodeName === "VIDEO") {
           addVideoToTargets(node);
-        } else if (node.querySelectorAll) {
+        } else if (
+          node.nodeType === Node.ELEMENT_NODE &&
+          node.querySelectorAll
+        ) {
           // ノードが子要素を持つ可能性がある場合、その中のvideo要素を探す
           const videos = node.querySelectorAll("video");
           videos.forEach((video) => addVideoToTargets(video));
@@ -219,9 +252,9 @@ function callback(mutationsList, observer) {
     }
   }
 
-  // DOM変更時に切断済みvideoを除外し、新規videoを取りこぼさないようにする
-  cleanupDisconnectedVideos();
-  findAndInitAllVideos();
+  if (shouldScheduleScan) {
+    scheduleFullVideoScan();
+  }
 }
 
 // 新しいvideo要素をtargetVideos配列に追加する関数
@@ -300,9 +333,9 @@ function initializeEvents(videoElement) {
 
       getStoredPlaybackSpeed().then((desiredRate) => {
         if (Math.abs(videoElement.playbackRate - desiredRate) > RATE_EPSILON) {
-          isApplyingRate = true;
-          videoElement.playbackRate = desiredRate;
-          isApplyingRate = false;
+          withApplyingRate(() => {
+            videoElement.playbackRate = desiredRate;
+          });
         }
       });
     });
@@ -388,9 +421,9 @@ function applySpeedToAllVideos(speed) {
   const normalizedSpeed = normalizeSpeed(speed);
 
   targetVideos.forEach((video) => {
-    isApplyingRate = true;
-    video.playbackRate = normalizedSpeed;
-    isApplyingRate = false;
+    withApplyingRate(() => {
+      video.playbackRate = normalizedSpeed;
+    });
     // 各ビデオごとの速度表示を更新
     updateSpeedIndicator(video, normalizedSpeed);
   });
@@ -416,9 +449,9 @@ async function setPlaybackSpeed(video, speed, duration) {
   const normalizedSpeed = normalizeSpeed(speed);
 
   if (speedIndicatorManager) {
-    isApplyingRate = true;
-    video.playbackRate = normalizedSpeed;
-    isApplyingRate = false;
+    withApplyingRate(() => {
+      video.playbackRate = normalizedSpeed;
+    });
     speedIndicatorManager.show(normalizedSpeed, duration);
   }
 
