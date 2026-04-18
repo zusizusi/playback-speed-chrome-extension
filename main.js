@@ -1,6 +1,7 @@
 console.log("Hello! from Video Speed Controller");
 let targetVideos = []; // 複数のvideo要素を管理するための配列
 let isApplyingRate = false;
+let speedAdjustmentQueue = Promise.resolve();
 
 const DEFAULT_PLAYBACK_SPEED = 1.0;
 const SPEED_STEP = 0.1;
@@ -410,7 +411,7 @@ function updateSpeedIndicator(video, speed, duration = TIMER_DURATION) {
   }
 }
 
-function setPlaybackSpeed(video, speed, duration) {
+async function setPlaybackSpeed(video, speed, duration) {
   const speedIndicatorManager = videoCanvasMap.get(video);
   const normalizedSpeed = normalizeSpeed(speed);
 
@@ -421,20 +422,30 @@ function setPlaybackSpeed(video, speed, duration) {
     speedIndicatorManager.show(normalizedSpeed, duration);
   }
 
-  saveStoredPlaybackSpeed(normalizedSpeed).then(() => {
-    console.log("playbackSpeed is set to " + normalizedSpeed);
-  });
+  await saveStoredPlaybackSpeed(normalizedSpeed);
+  console.log("playbackSpeed is set to " + normalizedSpeed);
 }
 
 function clampSpeed(speed) {
   return Math.max(MIN_PLAYBACK_SPEED, Math.min(MAX_PLAYBACK_SPEED, speed));
 }
 
+function enqueueSpeedAdjustment(task) {
+  speedAdjustmentQueue = speedAdjustmentQueue
+    .then(() => task())
+    .catch((error) => {
+      console.error("Failed to adjust playback speed", error);
+    });
+  return speedAdjustmentQueue;
+}
+
 async function adjustSpeed(video, duration, delta) {
-  const currentSpeed = await getStoredPlaybackSpeed();
-  const nextSpeed = clampSpeed(currentSpeed + delta);
-  setPlaybackSpeed(video, nextSpeed, duration);
-  applySpeedToAllVideos(nextSpeed);
+  return enqueueSpeedAdjustment(async () => {
+    const currentSpeed = await getStoredPlaybackSpeed();
+    const nextSpeed = clampSpeed(currentSpeed + delta);
+    await setPlaybackSpeed(video, nextSpeed, duration);
+    applySpeedToAllVideos(nextSpeed);
+  });
 }
 
 function increaseSpeed(video, duration) {
@@ -446,8 +457,10 @@ function decreaseSpeed(video, duration) {
 }
 
 function resetSpeed(video, duration) {
-  setPlaybackSpeed(video, DEFAULT_PLAYBACK_SPEED, duration);
-  applySpeedToAllVideos(DEFAULT_PLAYBACK_SPEED);
+  return enqueueSpeedAdjustment(async () => {
+    await setPlaybackSpeed(video, DEFAULT_PLAYBACK_SPEED, duration);
+    applySpeedToAllVideos(DEFAULT_PLAYBACK_SPEED);
+  });
 }
 
 // MutationObserverの設定とイベントの初期化
