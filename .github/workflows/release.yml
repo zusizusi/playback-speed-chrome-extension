@@ -1,0 +1,105 @@
+name: Release Extension
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version (for example: 1.0.5)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Update manifest version
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          node <<'EOF'
+          const fs = require('node:fs');
+
+          const version = process.env.RELEASE_VERSION;
+          if (!/^\d+\.\d+\.\d+$/.test(version)) {
+            throw new Error(`Invalid version: ${version}`);
+          }
+
+          const file = 'manifest.json';
+          const json = JSON.parse(fs.readFileSync(file, 'utf8'));
+          json.version = version;
+          fs.writeFileSync(file, `${JSON.stringify(json, null, 2)}\n`);
+          EOF
+
+      - name: Commit version bump and push tag
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add manifest.json
+          git commit -m "chore: release v${RELEASE_VERSION}"
+          git tag "v${RELEASE_VERSION}"
+          git push origin HEAD
+          git push origin "v${RELEASE_VERSION}"
+          echo "RELEASE_TAG=v${RELEASE_VERSION}" >> "$GITHUB_ENV"
+
+      - name: Set release tag from tag push event
+        if: startsWith(github.ref, 'refs/tags/')
+        run: echo "RELEASE_TAG=${GITHUB_REF_NAME}" >> "$GITHUB_ENV"
+
+      - name: Read extension version
+        run: |
+          set -euo pipefail
+          EXT_VERSION="$(node -p \"require('./manifest.json').version\")"
+          echo "EXT_VERSION=${EXT_VERSION}" >> "$GITHUB_ENV"
+
+      - name: Package extension
+        run: |
+          set -euo pipefail
+          PACKAGE_DIR="release/playback-speed-chrome-extension"
+          mkdir -p "$PACKAGE_DIR"
+
+          cp manifest.json "$PACKAGE_DIR/manifest.json"
+          cp main.js "$PACKAGE_DIR/main.js"
+          cp LICENSE "$PACKAGE_DIR/LICENSE"
+          cp README.md "$PACKAGE_DIR/README.md"
+          cp -R icons "$PACKAGE_DIR/icons"
+
+          cd release
+          zip -r "playback-speed-chrome-extension-v${EXT_VERSION}.zip" playback-speed-chrome-extension
+
+      - name: Upload release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: playback-speed-chrome-extension-v${{ env.EXT_VERSION }}
+          path: release/playback-speed-chrome-extension-v${{ env.EXT_VERSION }}.zip
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: ${{ env.RELEASE_TAG }}
+          generate_release_notes: true
+          files: release/playback-speed-chrome-extension-v${{ env.EXT_VERSION }}.zip
+          overwrite_files: true
